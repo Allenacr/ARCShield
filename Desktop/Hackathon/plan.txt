@@ -1,0 +1,94 @@
+## Updated Plan — Sleuth: Evidence-Backed Business Intelligence Investigator
+
+### Core concept
+Not an extractor+dashboard. An investigation system: paste a profile → specialized agents gather evidence → Chief Investigator cross-checks and scores confidence → findings link back to source evidence → corkboard collapses into structured report.
+
+### Data strategy (locked, given today's discussion)
+```
+                    Data Provider Abstraction
+                              │
+              ┌───────────────┴───────────────┐
+              │                                │
+     Verified Owner Mode                 Demo Case Mode
+     (OAuth, Graph API,                  (pre-fetched, cached
+      only works for accounts            sample profiles —
+      that connect their own             this is your live
+      Business account to your app)      demo path)
+              │                                │
+              └───────────────┬────────────────┘
+                              ▼
+                    Normalized Schema
+                              ▼
+                       AI Pipeline
+```
+Demo on cached cases. Mention Verified Owner OAuth as functional/roadmap. Never depend on live arbitrary-URL scraping.
+
+### Pipeline
+```
+Raw Data → Sanitization (deterministic) → Injection Detection (flag, don't silently block)
+        → 4 Investigators (Profile / Content / Visual / Audience) — parallel
+        → Chief Investigator (contradiction check + confidence scoring)
+        → Approval Gate (before any write/export)
+        → 3 Outputs: Corkboard (human) · Evidence Report (analyst) · JSON (machine)
+```
+
+### UI — only load-bearing animations
+- Folder-flip case open
+- Pin drop (evidence attached to case state)
+- Red string draw-on (real edge in evidence graph)
+- Typewriter investigation timeline (covers agent latency)
+- Stamp impact (finding finalized)
+- Corkboard → report shared-element transition (case closed)
+
+### Build order (Tier S — hackathon scope, nothing else)
+1. Normalized schema + demo dataset
+2. Sanitization + injection detection
+3. 4 investigator agents with structured, source-referenced output
+4. Chief Investigator: confidence scoring + contradiction flagging
+5. Corkboard: pin/string/why-evidence only
+6. Investigation timeline log
+7. Corkboard → report transition
+
+Roadmap-only (say it, don't build it): OAuth verified-owner mode, CRM integration, PDF export, saved case history, similarity search.
+
+---
+
+## Requirements
+
+### Functional
+- Accept Instagram handle/URL input (case intake)
+- Support two data sources: cached demo profiles + optional Graph API OAuth flow
+- Deterministic sanitization of all scraped text before it reaches any LLM prompt
+- Injection-pattern detection with visible flag in output
+- 4 independent analysis agents, each scoped to specific tools/data
+- Synthesis step: merge findings, detect contradictions, compute confidence per finding
+- Evidence linkage: every finding traceable to specific source post/caption/bio line
+- Approval gate before any external call, export, or persistence
+- Three output renderings: corkboard UI, analyst evidence report, machine JSON
+- Audit/chain-of-custody log of every agent action and data access
+- PII (email/phone) auto-detected, redacted by default, reveal action logged
+
+### Technical / Stack
+- **Frontend:** React, Framer Motion (spring physics for pins/cards), SVG (string draw-on via stroke-dashoffset), GSAP optional for timeline choreography
+- **Backend:** FastAPI (Python — needed for scraping/NLP/vision tooling)
+- **Agent orchestration:** LangGraph or custom state machine (approval gates as real control-flow nodes, not prompt instructions)
+- **Data extraction:** Instagram Graph API (OAuth) + static demo dataset (JSON fixtures matching normalized schema)
+- **Vision:** CLIP or vision-capable LLM call for image classification
+- **NLP:** LLM structured-output (JSON mode) for tone/entity/category extraction
+- **DB:** PostgreSQL for case metadata + audit logs
+- **Auth:** JWT for app sessions, OAuth2 for Graph API connection
+
+### Security requirements
+- Untrusted content (bio/captions) wrapped in explicit delimiters in every prompt template
+- Regex/heuristic + LLM-assisted injection pattern detection, non-silent (flag, log, continue safely)
+- Per-agent tool allowlists enforced at orchestrator level, not by prompt instruction alone
+- Rate limiting (token bucket) + circuit breaker on extraction endpoints
+- AES-256 encryption at rest for any persisted PII
+- No raw PII in server logs
+- Explicit data retention policy shown at case creation; ephemeral by default
+- Immutable audit log entry per agent action/tool call
+
+### Non-functional
+- Demo must run end-to-end on cached data with zero external dependency risk
+- Each animation must correspond to a real backend state change (no decorative-only motion)
+- Pipeline agnostic to data source (same code path for OAuth data and demo fixtures)
