@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "816293998722",
+    "project_id": "arcshield-guard",
+    "storage_bucket": "arcshield-guard.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:816293998722:android:4ecbdd3011a7a5776c849b",
+        "android_client_info": {
+          "package_name": "com.arcshield.bidirectional_transaction_guard"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCuMwyH52UH7embECINltdVuXt0G6ovyKo"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
