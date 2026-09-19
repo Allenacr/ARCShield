@@ -5,7 +5,7 @@ ARCShield is a simulated financial environment. It does not connect to NPCI, UPI
 ## Release layout
 
 - Frontend: Vercel using `vercel.json`
-- API: Render using `render.yaml` and Python 3.11 from `.python-version`
+- API: Render using `render.yaml` and Python 3.11
 - Data and realtime: Supabase, configured separately
 - Mobile push: Firebase Admin credentials configured only on the API service
 
