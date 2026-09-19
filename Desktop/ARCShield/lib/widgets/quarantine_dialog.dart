@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
-import '../services/supabase_service.dart';
+import '../services/mobile_api_service.dart';
 
 class QuarantineDialog extends StatefulWidget {
   final String transactionId;
@@ -8,7 +8,7 @@ class QuarantineDialog extends StatefulWidget {
   final double amount;
   final String counterparty;
   final List<String> reasonCodes;
-  final VoidCallback onActionCompleted;
+  final ValueChanged<String> onActionCompleted;
 
   const QuarantineDialog({
     super.key,
@@ -44,28 +44,35 @@ class _QuarantineDialogState extends State<QuarantineDialog> {
     }
   }
 
-  Future<void> _handleHold() async {
+  Future<void> _handleDecision(String decision) async {
     setState(() => _isLoading = true);
-    final service = SupabaseService();
-    await service.quarantineTransaction(
-      transactionId: widget.transactionId,
-      accountId: widget.accountId,
-      amount: widget.amount,
-      reason: 'User tapped Hold for 24 Hours on unexpected credit',
-    );
-    setState(() => _isLoading = false);
-
-    if (mounted) {
+    try {
+      await MobileApiService().recordDecision(
+        transactionId: widget.transactionId,
+        accountId: widget.accountId,
+        amount: widget.amount,
+        decision: decision,
+        reason: 'Account holder chose $decision on unexpected incoming credit',
+      );
+      if (!mounted) return;
       Navigator.of(context).pop();
-      widget.onActionCompleted();
+      widget.onActionCompleted(decision);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          backgroundColor: const Color(0xFF10B981),
-          content: Text(
-            '₹${NumberFormat.currency(locale: 'en_IN', symbol: '').format(widget.amount)} quarantined for 24 hours. Your available balance is safely protected.',
-          ),
+          backgroundColor: decision == 'HOLD' ? const Color(0xFF10B981) : const Color(0xFF0B57D0),
+          content: Text(decision == 'HOLD'
+              ? '₹${NumberFormat.currency(locale: 'en_IN', symbol: '').format(widget.amount)} held for 24 hours. The backend ledger has been updated.'
+              : 'Your $decision decision was recorded by the backend.'),
         ),
       );
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(backgroundColor: const Color(0xFFD93025), content: Text('Could not record decision: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isLoading = false);
     }
   }
 
@@ -191,7 +198,7 @@ class _QuarantineDialogState extends State<QuarantineDialog> {
               children: [
                 Expanded(
                   child: OutlinedButton(
-                    onPressed: _isLoading ? null : () => Navigator.of(context).pop(),
+                    onPressed: _isLoading ? null : () => _handleDecision('RECOGNISE'),
                     style: OutlinedButton.styleFrom(
                       side: const BorderSide(color: Color(0xFFDADCE0)),
                       padding: const EdgeInsets.symmetric(vertical: 14),
@@ -206,7 +213,7 @@ class _QuarantineDialogState extends State<QuarantineDialog> {
                 Expanded(
                   flex: 2,
                   child: ElevatedButton(
-                    onPressed: _isLoading ? null : _handleHold,
+                    onPressed: _isLoading ? null : () => _handleDecision('HOLD'),
                     style: ElevatedButton.styleFrom(
                       backgroundColor: const Color(0xFF0B57D0),
                       elevation: 0,

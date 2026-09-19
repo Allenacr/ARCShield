@@ -33,6 +33,8 @@ app.add_middleware(
 IN_MEMORY_CASES: List[Dict[str, Any]] = []
 IN_MEMORY_HOLDS: List[Dict[str, Any]] = []
 IN_MEMORY_AUDIT_LOGS: List[Dict[str, Any]] = []
+IN_MEMORY_DEVICE_TOKENS: Dict[str, str] = {}
+IN_MEMORY_MOBILE_DECISIONS: List[Dict[str, Any]] = []
 FEDERATED_ROUND = 14
 
 # Pre-seed graph with sample cybercrime complaint for Scenario 5 demo
@@ -66,6 +68,23 @@ class QuarantineRequest(BaseModel):
 class CounterfactualRequest(BaseModel):
     transaction: Dict[str, Any]
     overrides: Dict[str, Any]
+
+class DeviceRegistrationRequest(BaseModel):
+    account_id: str
+    fcm_token: str = Field(..., min_length=10)
+
+class MobileDecisionRequest(BaseModel):
+    transaction_id: str
+    account_id: str
+    decision: str = Field(..., pattern="^(HOLD|RECOGNISE|REPORT)$")
+    amount: float = Field(..., gt=0)
+    reason: Optional[str] = None
+
+class DemoIncomingCreditRequest(BaseModel):
+    account_id: str
+    counterparty: str = "karan9921@upi (Stranger)"
+    amount: float = Field(42000.0, gt=0)
+    transaction_id: Optional[str] = None
 
 # ─────────────────────────────────────────────────────────────
 # API Endpoints
@@ -152,6 +171,78 @@ def score_transaction(payload: TransactionScoreRequest, background_tasks: Backgr
         "shap_top": verdict["shap_top"],
         "latency_ms": elapsed_ms,
     }
+
+@app.post("/mobile/devices")
+def register_mobile_device(payload: DeviceRegistrationRequest):
+    """Registers the phone token used for FCM delivery in the demo environment."""
+    IN_MEMORY_DEVICE_TOKENS[payload.account_id] = payload.fcm_token
+    return {"success": True, "account_id": payload.account_id, "registered": True}
+
+@app.post("/mobile/demo/incoming-credit")
+def trigger_demo_incoming_credit(payload: DemoIncomingCreditRequest):
+    """Creates a high-risk incoming credit and pushes it to the account holder's phone."""
+    tx_id = payload.transaction_id or f"tx-mobile-{uuid.uuid4().hex[:10]}"
+    graph_feats = graph_service.get_compact_features(payload.counterparty)
+    tx_dict = {
+        "amount": payload.amount,
+        "direction": "INCOMING",
+        "counterparty": payload.counterparty,
+        "device_id": "dev-primary-01",
+    }
+    feature_vector = feature_pipeline.build_feature_vector(tx_dict, graph_features=graph_feats)
+    verdict = fusion_engine.fuse(
+        model_prob=model_registry.predict_proba(feature_vector),
+        fired_rules=rule_engine.evaluate(feature_vector),
+        direction="INCOMING",
+        shap_top=model_registry.explain(feature_vector),
+    )
+    token = IN_MEMORY_DEVICE_TOKENS.get(payload.account_id)
+    dispatch = notification_service.send_fraud_alert(
+        fcm_token=token,
+        title="Unexpected Inflow Alert",
+        body=f"₹{payload.amount:,.2f} arrived from {payload.counterparty}. Review before using these funds.",
+        transaction_id=tx_id,
+        risk_band=verdict["risk_band"],
+        direction="INCOMING",
+        reason_codes=verdict["reason_codes"],
+        amount=payload.amount,
+    )
+    return {
+        "success": True,
+        "transaction_id": tx_id,
+        "risk_band": verdict["risk_band"],
+        "risk_score": verdict["risk_score"],
+        "reason_codes": verdict["reason_codes"],
+        "dispatch": dispatch,
+    }
+
+@app.post("/mobile/decisions")
+def record_mobile_decision(payload: MobileDecisionRequest):
+    """Records the account holder's phone decision and applies HOLD to the ledger."""
+    decision = {
+        "transaction_id": payload.transaction_id,
+        "account_id": payload.account_id,
+        "decision": payload.decision,
+        "amount": payload.amount,
+        "reason": payload.reason,
+        "created_at": datetime.now(timezone.utc).isoformat(),
+    }
+    IN_MEMORY_MOBILE_DECISIONS.append(decision)
+    IN_MEMORY_AUDIT_LOGS.append({"action": f"MOBILE_{payload.decision}", **decision})
+
+    hold = None
+    if payload.decision == "HOLD":
+        if payload.account_id not in ledger_service.accounts:
+            ledger_service.create_account(payload.account_id, initial_balance=payload.amount)
+        hold = ledger_service.place_quarantine_hold(
+            account_id=payload.account_id,
+            transaction_id=payload.transaction_id,
+            amount=payload.amount,
+            reason=payload.reason or "Account holder held unexpected incoming credit",
+        )
+        IN_MEMORY_HOLDS.append(hold)
+
+    return {"success": True, "decision": decision, "hold": hold, "ledger_balance": ledger_service.get_balance(payload.account_id)}
 
 @app.post("/quarantine")
 def apply_quarantine(payload: QuarantineRequest):

@@ -83,7 +83,8 @@ class _HomeScreenState extends State<HomeScreen> {
           amount: amount,
           counterparty: counterparty,
           reasonCodes: reasons,
-          onActionCompleted: () {
+          onActionCompleted: (decision) {
+            if (decision != 'HOLD') return;
             setState(() {
               _currentAccount = Account(
                 id: _currentAccount.id,
