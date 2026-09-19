@@ -2,12 +2,14 @@ services:
   - type: web
     name: arcshield-api
     runtime: python
-    buildCommand: pip install -r requirements.txt
+    buildCommand: pip install -r requirements-render.txt
     startCommand: gunicorn api.main:app -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:$PORT --workers 2
     healthCheckPath: /health
     envVars:
       - key: API_DEBUG
         value: "false"
+      - key: PYTHON_VERSION
+        value: "3.11.9"
       - key: CORS_ORIGINS
         sync: false
       - key: SUPABASE_URL
