@@ -103,6 +103,25 @@ def test_federated_aggregation_round_advances():
     assert data["current_round"] == previous_round + 1
     assert data["raw_identifiers_shared"] == 0
 
+def test_mobile_decision_updates_backend_ledger():
+    account_id = "acc-mobile-demo"
+    register = client.post("/mobile/devices", json={
+        "account_id": account_id,
+        "fcm_token": "demo-token-1234567890",
+    })
+    assert register.status_code == 200
+    assert register.json()["registered"] is True
+
+    decision = client.post("/mobile/decisions", json={
+        "transaction_id": "tx-mobile-demo-01",
+        "account_id": account_id,
+        "decision": "HOLD",
+        "amount": 42000.0,
+    })
+    assert decision.status_code == 200
+    assert decision.json()["decision"]["decision"] == "HOLD"
+    assert decision.json()["ledger_balance"]["held_balance"] == 42000.0
+
 def test_ledger_balance_and_spend_check():
     # Account acc-user-target was credited and quarantined in test_scenario_5
     resp = client.get("/accounts/acc-user-target/balance")

@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'mobile_api_service.dart';
 
 typedef AlertCallback = void Function(Map<String, dynamic> data);
 
@@ -44,6 +45,17 @@ class NotificationService {
       if (settings.authorizationStatus == AuthorizationStatus.authorized) {
         String? token = await messaging.getToken();
         debugPrint('ARCShield FCM Device Token: $token');
+        if (token != null) {
+          try {
+            await MobileApiService().registerDevice(
+              accountId: 'demo-account-01',
+              fcmToken: token,
+            );
+            debugPrint('ARCShield FCM token registered with backend.');
+          } catch (e) {
+            debugPrint('FCM token registration notice: $e');
+          }
+        }
       }
 
       // Foreground FCM listener
